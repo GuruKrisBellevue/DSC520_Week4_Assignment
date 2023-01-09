@@ -1,0 +1,139 @@
+---
+title: "DSC520_Week4_Guruprasad_Velikadu_Krishnamoorthy_Part_4.2"
+author: "Guruprasad Velikadu Krishnamoorthy"
+date: "2023-01-08"
+output: 
+  pdf_document: 
+    highlight: espresso
+---
+# Assignment Week 4 Part 2
+### Loading the required Packages
+```{r}
+library(ggplot2)
+library(psych)
+library(qqplotr)
+library(pastecs)
+library(readxl)
+library(plyr)
+library(stringr)
+library(lubridate)
+```
+### Set the working directory to the root of your DSC 520 directory and initial settings
+```{r}
+knitr::opts_knit$set(root.dir ="C:/Users/Gurup/GURU/Learning/Masters/Term_2/DSC520_T302_Statistics_for_Data_Science/Week_4/")
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 80), tidy = TRUE)
+```
+
+### 4.a.Use the apply function on a variable in your dataset
+```{r}
+# reading from Excel
+excel_path="data/week-6-housing.xlsx"
+housing_df <- read_excel(excel_path)
+# Reading only the second column from Dataframe and converting it to a Matrix
+salePrice <- as.matrix(housing_df[,2])
+# using the apply function
+apply(salePrice,2,mean)
+apply(salePrice,2,length)
+```
+
+### 4.b. Use the aggregate function on a variable in your dataset
+```{r}
+aggregate(`Sale Price` ~ zip5, housing_df,mean)
+aggregate(`Sale Price`~ zip5+ctyname,housing_df,mean,na.rm=TRUE)
+aggregate(cbind(bedrooms,square_feet_total_living)~ctyname,housing_df,mean,na.rm=TRUE)
+```
+
+### 4.c. Use the plyr function on a variable in your dataset – more specifically, I want to see you split some data, perform a modification to the data, and then bring it back together
+
+#### Solution: This question is answered with 2 examples, one using ddply where aggregation is done. Other using adply where data manipulation is done for every row.
+##### Example 1 : ddply is used to calculate the Average of sales price for houses based on the year built
+```{r}
+# Using ddply
+housingSubset_df1 <- subset(housing_df,grepl("NE",housing_df$addr_full))
+AvgsqftLiving <- ddply(housingSubset_df1,.(bedrooms),summarize,meansqft=round(mean(square_feet_total_living)))
+AvgSales <- ddply(housingSubset_df1,.(year_built),summarize,meanSales=round(mean(`Sale Price`)))
+head(AvgSales)
+```
+
+##### Example 2 : adply is used to create a new column that replaces the word "NE" with "North East" in the address column. A function is created to split the data, extract NE out of it , replace it with North East and bring it all together. 
+```{r}
+# Extracting only 20 sample rows to fit output on screen
+housingSubset_df2 <- housingSubset_df1[1:20,]
+# Function to replace the word `NE` with `North East`
+replace_NE <- function(x)
+{
+    if(grepl("NE",x))
+    {
+        str1 <-  unlist(strsplit(x," "))
+        str2 <-  ifelse(str1=="NE","North East",str1)
+        str2 <- paste(str2,collapse = " ")
+        print(str2)
+    }else 
+    {
+        print(x)
+    }
+}
+# Using adply to transform every row in housingSubset_df2
+adply(housingSubset_df2$addr_full, 1, function(x) {data.frame(updated_addr=replace_NE(x), stringsAsFactors=FALSE)})
+```
+
+### 4.d.Check distributions of the data
+#### Solution: The distributions are plotted with two examples
+##### Example 1: Distribution of Average housing sales price based on the year built
+
+##### The Results from Shapiro test suggests the value of p is less than 0.05, hence the distribution is not normal. Also the boxplot has many outliers(shown in next part of the question) which explains the distribution is not normal.The distribution is skewed towards the right. The skewness and kurtosis are also deviated from the values of Normal distribution. 
+```{r}
+gg.avgSales <- ggplot(AvgSales,aes(meanSales/1000))+geom_histogram(aes(y=after_stat(density)),color="black",fill="grey")+labs(x="Sales price(in Thousands)",y="Density",title = "Average Sales Price distribution based on the year built")
+gg.avgSales+stat_function(fun=dnorm,args=list(mean=mean(AvgSales$meanSales/1000,na.rm=TRUE),sd=sd(AvgSales$meanSales/1000,na.rm=TRUE)),color="Red",linewidth=1.5)+theme_bw()
+stat.desc(AvgSales$meanSales,norm=TRUE)
+shapiro.test(AvgSales$meanSales)
+```
+
+##### Example 2: Distribution of Housing Sales in Redmond
+
+##### The Results from Shapiro test suggests the value of p is less than 0.05, hence the distribution is not normal. Also the boxplot has many outliers(shown in next part of the question) which explains the distribution is not normal. The distribution is skewed to the right with a long tail
+
+```{r}
+# Creating a subset of 5000 rows for the houses in Redmond
+housingSubset_redmond <- subset(housing_df,housing_df$ctyname=="REDMOND")[1:5000,]
+# creating histogram and Normal distribution on the sales price in Redmond
+gg.redmond <- ggplot(housingSubset_redmond,aes(`Sale Price`/1000))+geom_histogram(aes(y=after_stat(density)),color="black",fill="pink")+labs(x="Sales price(in Thousands)",y="Density",title = "Sales Price distribution of houses in Redmond")
+gg.redmond+stat_function(fun=dnorm,args=list(mean=mean(housingSubset_redmond$`Sale Price`/1000,na.rm=TRUE),sd=sd(housingSubset_redmond$`Sale Price`/1000,na.rm=TRUE)),color="Blue",linewidth=1.5) +theme_bw()
+# Describing the statistics
+stat.desc(housingSubset_redmond$`Sale Price`,norm=TRUE)
+shapiro.test(housingSubset_redmond$`Sale Price`)
+```
+
+### 4.e.Identify if there are any outliers
+##### Example 1: The outlers in the boxplot for Average House Price are highlighted in Red
+
+```{r}
+ggplot(data=AvgSales,aes(y=meanSales,x=1))+geom_boxplot(outlier.colour = "red") + theme_bw() + labs(title = "Box plot for Average House Price ")
+```
+
+##### Example 2: The outlers in the boxplot for House Price in Redmond are highlighted in Blue
+```{r}
+ggplot(housingSubset_redmond,aes(y=`Sale Price`/1000,x=1))+geom_boxplot(outlier.colour = "blue")+ theme_bw() + labs(title = "Box plot for House Price in Redmond", y="Price in thousands")
+```
+
+### f.Create at least 2 new variables
+##### Variable 1
+```{r}
+housingSubset_redmond$Sale_Year <- year(housingSubset_redmond$`Sale Date`)
+head(housingSubset_redmond$Sale_Year)
+```
+
+##### Variable 2  
+```{r}
+# Using ifelse to create variable
+housingSubset_redmond$age_of_prop_when_purchased <- ifelse(housingSubset_redmond$Sale_Year-housingSubset_redmond$year_built >0,housingSubset_redmond$Sale_Year-housingSubset_redmond$year_built,0)
+head(housingSubset_redmond$age_of_prop_when_purchased)
+```
+
+# Session info
+
+
+```{r}
+sessionInfo()
+```
+
